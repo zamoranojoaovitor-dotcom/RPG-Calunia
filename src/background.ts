@@ -34,39 +34,10 @@ async function showBadge() {
 
 async function clearBadge() {
   try {
-    await OBR.action.setBadgeText(
-      undefined
-    );
+    await OBR.action.setBadgeText(undefined);
   } catch (error) {
     console.error(
       "Erro ao limpar badge:",
-      error
-    );
-  }
-}
-
-async function setupActionIcon() {
-  try {
-    // IMPORTANTE:
-    // Agora usamos o PNG, não o SVG.
-    await OBR.action.setIcon(
-      "/icon.png"
-    );
-
-    console.log(
-      "Ícone PNG do RPG Calúnia configurado."
-    );
-
-    const currentIcon =
-      await OBR.action.getIcon();
-
-    console.log(
-      "Ícone atual:",
-      currentIcon
-    );
-  } catch (error) {
-    console.error(
-      "Erro ao configurar ícone:",
       error
     );
   }
@@ -93,12 +64,8 @@ async function start() {
     playerRole
   );
 
-  // Define explicitamente o ícone PNG.
-  await setupActionIcon();
-
-  // ============================================================
-  // RECEBER PEDIDOS DE TESTE
-  // ============================================================
+  // Não definimos mais o ícone por código.
+  // O manifest.json será responsável pelo ícone inicial.
 
   OBR.broadcast.onMessage(
     REQUEST_CHANNEL,
@@ -111,7 +78,6 @@ async function start() {
         request
       );
 
-      // Ignora pedidos destinados a outros jogadores.
       if (
         request.targetPlayerId !==
         playerId
@@ -138,10 +104,6 @@ async function start() {
       );
     }
   );
-
-  // ============================================================
-  // OBSERVAR ALTERAÇÕES DO JOGADOR
-  // ============================================================
 
   OBR.player.onChange(
     async (player) => {
