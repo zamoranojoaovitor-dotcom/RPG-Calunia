@@ -1,8 +1,10 @@
 import OBR from "@owlbear-rodeo/sdk";
 
 const REQUEST_CHANNEL = "rpg-calunia/test-request";
+
 const LOCAL_REQUEST_CHANNEL =
   "rpg-calunia/show-test-request";
+
 const METADATA_KEY =
   "rpg-calunia/pending-test";
 
@@ -32,7 +34,9 @@ async function showBadge() {
 
 async function clearBadge() {
   try {
-    await OBR.action.setBadgeText(undefined);
+    await OBR.action.setBadgeText(
+      undefined
+    );
   } catch (error) {
     console.error(
       "Erro ao limpar badge:",
@@ -43,12 +47,14 @@ async function clearBadge() {
 
 async function setupActionIcon() {
   try {
+    // IMPORTANTE:
+    // Agora usamos o PNG, não o SVG.
     await OBR.action.setIcon(
-      "/icon.svg"
+      "/icon.png"
     );
 
     console.log(
-      "Ícone do RPG Calúnia configurado."
+      "Ícone PNG do RPG Calúnia configurado."
     );
 
     const currentIcon =
@@ -87,7 +93,12 @@ async function start() {
     playerRole
   );
 
+  // Define explicitamente o ícone PNG.
   await setupActionIcon();
+
+  // ============================================================
+  // RECEBER PEDIDOS DE TESTE
+  // ============================================================
 
   OBR.broadcast.onMessage(
     REQUEST_CHANNEL,
@@ -100,6 +111,7 @@ async function start() {
         request
       );
 
+      // Ignora pedidos destinados a outros jogadores.
       if (
         request.targetPlayerId !==
         playerId
@@ -126,6 +138,10 @@ async function start() {
       );
     }
   );
+
+  // ============================================================
+  // OBSERVAR ALTERAÇÕES DO JOGADOR
+  // ============================================================
 
   OBR.player.onChange(
     async (player) => {
