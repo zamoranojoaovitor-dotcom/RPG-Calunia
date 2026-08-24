@@ -2,6 +2,8 @@
   "name": "RPG Calúnia",
   "version": "0.1.0",
   "manifest_version": 1,
+  "description": "Sistema de testes secretos para o RPG Calúnia.",
+  "icon": "/icon.svg",
   "background_url": "/background.html",
   "action": {
     "title": "RPG Calúnia",
