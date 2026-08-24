@@ -1,0 +1,13 @@
+{
+  "name": "RPG Calúnia",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "background_url": "/background.html",
+  "action": {
+    "title": "RPG Calúnia",
+    "icon": "/icon.svg",
+    "popover": "/",
+    "height": 500,
+    "width": 350
+  }
+}
