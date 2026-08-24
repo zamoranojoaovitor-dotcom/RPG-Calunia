@@ -32,12 +32,35 @@ async function showBadge() {
 
 async function clearBadge() {
   try {
-    // undefined remove o texto do badge.
-    // Não tentamos alterar a cor aqui.
     await OBR.action.setBadgeText(undefined);
   } catch (error) {
     console.error(
       "Erro ao limpar badge:",
+      error
+    );
+  }
+}
+
+async function setupActionIcon() {
+  try {
+    await OBR.action.setIcon(
+      "/icon.svg"
+    );
+
+    console.log(
+      "Ícone do RPG Calúnia configurado."
+    );
+
+    const currentIcon =
+      await OBR.action.getIcon();
+
+    console.log(
+      "Ícone atual:",
+      currentIcon
+    );
+  } catch (error) {
+    console.error(
+      "Erro ao configurar ícone:",
       error
     );
   }
@@ -64,9 +87,7 @@ async function start() {
     playerRole
   );
 
-  // ============================================================
-  // RECEBER PEDIDOS DE TESTE
-  // ============================================================
+  await setupActionIcon();
 
   OBR.broadcast.onMessage(
     REQUEST_CHANNEL,
@@ -79,7 +100,6 @@ async function start() {
         request
       );
 
-      // Ignora pedidos destinados a outros jogadores.
       if (
         request.targetPlayerId !==
         playerId
@@ -91,16 +111,12 @@ async function start() {
         `TESTE SOLICITADO: ${request.skillName} +${request.bonus}`
       );
 
-      // Salva o teste pendente no metadata do jogador.
       await OBR.player.setMetadata({
         [METADATA_KEY]: request,
       });
 
-      // Mostra a notificação da extensão.
       await showBadge();
 
-      // Envia o pedido para a interface da extensão,
-      // caso ela esteja aberta.
       await OBR.broadcast.sendMessage(
         LOCAL_REQUEST_CHANNEL,
         request,
@@ -111,10 +127,6 @@ async function start() {
     }
   );
 
-  // ============================================================
-  // OBSERVAR O METADATA DO JOGADOR
-  // ============================================================
-
   OBR.player.onChange(
     async (player) => {
       const pendingRequest =
@@ -122,7 +134,6 @@ async function start() {
           METADATA_KEY
         ] as TestRequest | undefined;
 
-      // Se o pedido foi removido, limpamos o badge.
       if (!pendingRequest) {
         await clearBadge();
       }
