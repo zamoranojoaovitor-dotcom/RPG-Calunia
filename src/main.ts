@@ -51,7 +51,12 @@ type RollResult = {
   };
 };
 
+// Guarda o nome do atributo associado a cada rolagem
+// iniciada por esta interface.
 const pendingRolls = new Map<string, string>();
+
+// Evita processar o mesmo resultado mais de uma vez.
+const processedRolls = new Set<string>();
 
 async function start() {
   const playerName = await OBR.player.getName();
@@ -72,10 +77,18 @@ async function start() {
     (event) => {
       const result = event.data as RollResult;
 
-      console.log(
-        "Resultado recebido do Dice+:",
-        result
-      );
+      console.log("Resultado recebido do Dice+:", result);
+
+      // Impede que o mesmo resultado seja mostrado duas vezes.
+      if (processedRolls.has(result.rollId)) {
+        console.log(
+          "Resultado duplicado ignorado:",
+          result.rollId
+        );
+        return;
+      }
+
+      processedRolls.add(result.rollId);
 
       const localSkillName =
         pendingRolls.get(result.rollId);
@@ -83,6 +96,7 @@ async function start() {
       const groups =
         result.result?.groups ?? [];
 
+      // Dice+ coloca aqui a descrição usada depois do "#".
       const skillFromDescription =
         groups
           .map((group) => group.description)
@@ -92,6 +106,7 @@ async function start() {
               description.trim().length > 0
           );
 
+      // Fallback: tenta ler diretamente da fórmula.
       const notation =
         result.result?.diceNotation ?? "";
 
@@ -121,32 +136,24 @@ async function start() {
       ) {
         status.textContent =
           `${result.playerName} — ${skillName} — ${result.result.totalValue}`;
-
-        pendingRolls.delete(result.rollId);
       }
 
-      const history =
-        document.querySelector<HTMLDivElement>(
-          "#history"
-        );
+      pendingRolls.delete(result.rollId);
 
-      if (
-        history &&
-        result.result?.totalValue !== undefined
-      ) {
-        const entry =
-          document.createElement("p");
+      // Evita deixar a memória crescer indefinidamente.
+      // Mantemos apenas os últimos 100 IDs processados.
+      if (processedRolls.size > 100) {
+        const firstId = processedRolls.values().next().value;
 
-        entry.textContent =
-          `${result.playerName} — ${skillName} — ${result.result.totalValue}`;
-
-        history.prepend(entry);
+        if (firstId) {
+          processedRolls.delete(firstId);
+        }
       }
     }
   );
 
   // ============================================================
-  // PEDIDO DE TESTE RECEBIDO PELO BACKGROUND
+  // PEDIDO RECEBIDO PELO BACKGROUND
   // ============================================================
 
   OBR.broadcast.onMessage(
@@ -160,7 +167,9 @@ async function start() {
         request
       );
 
-      OBR.action.setBadgeText("");
+      // Remove o badge assim que o pedido chegou
+      // na interface.
+      OBR.action.setBadgeText(undefined);
 
       renderPlayerInterface(
         playerName,
@@ -246,13 +255,11 @@ async function start() {
 
         <hr />
 
-        <h2>Resultado</h2>
+        <h2>Último resultado</h2>
 
         <p id="status">
           Aguardando...
         </p>
-
-        <div id="history"></div>
       </div>
     `;
 
@@ -334,12 +341,9 @@ async function start() {
       | TestRequest
       | undefined;
 
-  const initialPendingRequest =
-    storedPendingRequest ?? null;
-
   renderPlayerInterface(
     playerName,
-    initialPendingRequest,
+    storedPendingRequest ?? null,
     playerId
   );
 
@@ -433,24 +437,22 @@ function renderPlayerInterface(
                 ROLAR
               </button>
             </div>
+
+            <hr />
           `
           : ""
       }
-
-      <hr />
 
       <h2>Meus testes</h2>
 
       ${skillButtons}
 
       <p id="status"></p>
-
-      <div id="history"></div>
     </div>
   `;
 
   // ============================================================
-  // BOTÃO DE TESTE SOLICITADO
+  // TESTE SOLICITADO PELO MESTRE
   // ============================================================
 
   const requestedRoll =
@@ -489,8 +491,10 @@ function renderPlayerInterface(
               playerId,
               playerName,
               rollTarget: "gm_only",
+
               diceNotation:
                 `1d20+${pendingRequest.bonus} # ${pendingRequest.skillName}`,
+
               showResults: false,
               timestamp: Date.now(),
               source: EXTENSION_ID,
@@ -500,30 +504,30 @@ function renderPlayerInterface(
             }
           );
 
+          // Remove o pedido pendente.
           await OBR.player.setMetadata({
             [METADATA_KEY]: undefined,
           });
 
-          await OBR.action.setBadgeText("");
+          // Remove a bolinha/badge da extensão.
+          await OBR.action.setBadgeText(
+            undefined
+          );
 
-          status.textContent =
-            `${pendingRequest.skillName} enviado ao Mestre.`;
-
-          const pendingTest =
-            document.querySelector(
-              ".pending-test"
-            );
-
-          pendingTest?.remove();
+          // Em vez de remover somente o card,
+          // reconstruímos toda a interface.
+          renderPlayerInterface(
+            playerName,
+            null,
+            playerId
+          );
         } catch (error) {
           console.error(
             "Erro ao realizar teste solicitado:",
             error
           );
 
-          pendingRolls.delete(
-            rollId
-          );
+          pendingRolls.delete(rollId);
 
           status.textContent =
             "Erro ao realizar o teste.";
@@ -574,8 +578,10 @@ function renderPlayerInterface(
                 playerId,
                 playerName,
                 rollTarget: "gm_only",
+
                 diceNotation:
                   `1d20+${bonus} # ${skillName}`,
+
                 showResults: false,
                 timestamp: Date.now(),
                 source: EXTENSION_ID,
