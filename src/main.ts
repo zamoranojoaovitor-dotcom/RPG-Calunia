@@ -21,11 +21,11 @@ const LOCAL_CANCEL_CHANNEL =
 const METADATA_KEY =
   "rpg-calunia/pending-test";
 
-const HISTORY_STORAGE_PREFIX =
-  "rpg-calunia/gm-history";
-
 const PENDING_STORAGE_PREFIX =
   "rpg-calunia/pending-requests";
+
+const SIZE_STORAGE_PREFIX =
+  "rpg-calunia/popover-size";
 
 const skills = [
   "Raciocínio",
@@ -88,6 +88,26 @@ type RollResult = {
   };
 };
 
+type PopoverSize = {
+  width: number;
+  height: number;
+};
+
+const DEFAULT_SIZE: PopoverSize = {
+  width: 420,
+  height: 600,
+};
+
+const MIN_SIZE: PopoverSize = {
+  width: 300,
+  height: 400,
+};
+
+const MAX_SIZE: PopoverSize = {
+  width: 650,
+  height: 900,
+};
+
 const pendingRolls =
   new Map<string, string>();
 
@@ -101,23 +121,7 @@ const processedRolls =
   new Set<string>();
 
 let currentRoomId = "";
-
-function normalizeSkillName(value: string) {
-  const normalized = value
-    .replaceAll("-", " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-
-  const found = skills.find(
-    (skill) =>
-      skill
-        .replaceAll("-", " ")
-        .toLowerCase() === normalized
-  );
-
-  return found ?? value;
-}
+let currentPlayers: any[] = [];
 
 function createId(prefix: string) {
   return (
@@ -150,13 +154,240 @@ async function clearBadge() {
   }
 }
 
-// ============================================================
-// HISTÓRICO
-// ============================================================
+function getSizeStorageKey() {
+  return (
+    `${SIZE_STORAGE_PREFIX}:` +
+    currentRoomId
+  );
+}
+
+function getSavedSize(): PopoverSize {
+  try {
+    const raw =
+      localStorage.getItem(
+        getSizeStorageKey()
+      );
+
+    if (!raw) {
+      return DEFAULT_SIZE;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (
+      typeof parsed.width !== "number" ||
+      typeof parsed.height !== "number"
+    ) {
+      return DEFAULT_SIZE;
+    }
+
+    return clampSize({
+      width: parsed.width,
+      height: parsed.height,
+    });
+  } catch {
+    return DEFAULT_SIZE;
+  }
+}
+
+function saveSize(size: PopoverSize) {
+  localStorage.setItem(
+    getSizeStorageKey(),
+    JSON.stringify(size)
+  );
+}
+
+function clampSize(
+  size: PopoverSize
+): PopoverSize {
+  return {
+    width: Math.min(
+      Math.max(
+        size.width,
+        MIN_SIZE.width
+      ),
+      MAX_SIZE.width
+    ),
+
+    height: Math.min(
+      Math.max(
+        size.height,
+        MIN_SIZE.height
+      ),
+      MAX_SIZE.height
+    ),
+  };
+}
+
+async function applySavedPopoverSize() {
+  const size =
+    getSavedSize();
+
+  try {
+    await OBR.action.setWidth(
+      size.width
+    );
+
+    await OBR.action.setHeight(
+      size.height
+    );
+  } catch (error) {
+    console.error(
+      "Erro ao aplicar tamanho:",
+      error
+    );
+  }
+}
+
+function setupResizeHandle() {
+  const handle =
+    document.querySelector<HTMLDivElement>(
+      "#resize-handle"
+    );
+
+  if (!handle) {
+    return;
+  }
+
+  let resizing = false;
+  let startX = 0;
+  let startY = 0;
+  let startWidth = DEFAULT_SIZE.width;
+  let startHeight = DEFAULT_SIZE.height;
+
+  handle.addEventListener(
+    "pointerdown",
+    async (event) => {
+      event.preventDefault();
+
+      const size =
+        getSavedSize();
+
+      resizing = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      startWidth = size.width;
+      startHeight = size.height;
+
+      handle.setPointerCapture(
+        event.pointerId
+      );
+
+      document.body.classList.add(
+        "resizing"
+      );
+    }
+  );
+
+  handle.addEventListener(
+    "pointermove",
+    async (event) => {
+      if (!resizing) {
+        return;
+      }
+
+      const deltaX =
+        event.clientX - startX;
+
+      const deltaY =
+        event.clientY - startY;
+
+      const nextSize =
+        clampSize({
+          width:
+            startWidth +
+            deltaX,
+
+          height:
+            startHeight +
+            deltaY,
+        });
+
+      saveSize(nextSize);
+
+      try {
+        await OBR.action.setWidth(
+          nextSize.width
+        );
+
+        await OBR.action.setHeight(
+          nextSize.height
+        );
+      } catch (error) {
+        console.error(
+          "Erro ao redimensionar:",
+          error
+        );
+      }
+    }
+  );
+
+  handle.addEventListener(
+    "pointerup",
+    (event) => {
+      resizing = false;
+
+      try {
+        handle.releasePointerCapture(
+          event.pointerId
+        );
+      } catch {
+        // Ignora caso o ponteiro já tenha sido liberado.
+      }
+
+      document.body.classList.remove(
+        "resizing"
+      );
+    }
+  );
+
+  handle.addEventListener(
+    "pointercancel",
+    () => {
+      resizing = false;
+
+      document.body.classList.remove(
+        "resizing"
+      );
+    }
+  );
+}
+
+function addResizeHandle() {
+  if (
+    document.querySelector(
+      "#resize-handle"
+    )
+  ) {
+    return;
+  }
+
+  const handle =
+    document.createElement(
+      "div"
+    );
+
+  handle.id =
+    "resize-handle";
+
+  handle.setAttribute(
+    "aria-label",
+    "Redimensionar painel"
+  );
+
+  handle.title =
+    "Arraste para redimensionar";
+
+  document.body.appendChild(
+    handle
+  );
+
+  setupResizeHandle();
+}
 
 function getHistoryKey() {
   return (
-    `${HISTORY_STORAGE_PREFIX}:` +
+    `rpg-calunia/gm-history:` +
     currentRoomId
   );
 }
@@ -218,6 +449,97 @@ function clearGmHistory() {
   );
 
   renderGmHistory();
+}
+
+function getPendingRequests(): PendingRequest[] {
+  try {
+    const raw =
+      localStorage.getItem(
+        getPendingRequestsKey()
+      );
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingRequests(
+  requests: PendingRequest[]
+) {
+  localStorage.setItem(
+    getPendingRequestsKey(),
+    JSON.stringify(requests)
+  );
+}
+
+function addPendingRequest(
+  request: PendingRequest
+) {
+  const requests =
+    getPendingRequests();
+
+  const alreadyExists =
+    requests.some(
+      (item) =>
+        item.targetPlayerId ===
+          request.targetPlayerId &&
+        item.skillName ===
+          request.skillName
+    );
+
+  if (alreadyExists) {
+    return false;
+  }
+
+  requests.push(request);
+
+  savePendingRequests(
+    requests
+  );
+
+  return true;
+}
+
+function removePendingRequest(
+  requestId: string
+) {
+  const requests =
+    getPendingRequests();
+
+  const filtered =
+    requests.filter(
+      (request) =>
+        request.requestId !==
+        requestId
+    );
+
+  savePendingRequests(
+    filtered
+  );
+}
+
+function findPendingRequestByPlayerAndSkill(
+  playerId: string,
+  skillName: string
+) {
+  return getPendingRequests()
+    .find(
+      (request) =>
+        request.targetPlayerId ===
+          playerId &&
+        request.skillName ===
+          skillName
+    );
 }
 
 function renderGmHistory() {
@@ -283,103 +605,6 @@ function renderGmHistory() {
       .join("");
 }
 
-// ============================================================
-// PEDIDOS
-// ============================================================
-
-function getPendingRequests(): PendingRequest[] {
-  try {
-    const raw =
-      localStorage.getItem(
-        getPendingRequestsKey()
-      );
-
-    if (!raw) {
-      return [];
-    }
-
-    const parsed =
-      JSON.parse(raw);
-
-    return Array.isArray(parsed)
-      ? parsed
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePendingRequests(
-  requests: PendingRequest[]
-) {
-  localStorage.setItem(
-    getPendingRequestsKey(),
-    JSON.stringify(requests)
-  );
-}
-
-function addPendingRequest(
-  request: PendingRequest
-) {
-  const requests =
-    getPendingRequests();
-
-  const alreadyExists =
-    requests.some(
-      (item) =>
-        item.targetPlayerId ===
-          request.targetPlayerId &&
-        item.skillName ===
-          request.skillName
-    );
-
-  if (alreadyExists) {
-    return false;
-  }
-
-  requests.push(request);
-
-  savePendingRequests(requests);
-
-  return true;
-}
-
-function removePendingRequest(
-  requestId: string
-) {
-  const requests =
-    getPendingRequests();
-
-  const filtered =
-    requests.filter(
-      (request) =>
-        request.requestId !==
-        requestId
-    );
-
-  savePendingRequests(
-    filtered
-  );
-}
-
-function findPendingRequestByPlayerAndSkill(
-  playerId: string,
-  skillName: string
-) {
-  return getPendingRequests()
-    .find(
-      (request) =>
-        request.targetPlayerId ===
-          playerId &&
-        request.skillName ===
-          skillName
-    );
-}
-
-// ============================================================
-// RESULTADO
-// ============================================================
-
 function extractSkillName(
   result: RollResult,
   fallback?: string
@@ -395,10 +620,8 @@ function extractSkillName(
       )
       .find(
         (value) =>
-          typeof value ===
-            "string" &&
-          value.trim().length >
-            0
+          typeof value === "string" &&
+          value.trim().length > 0
       );
 
   if (description) {
@@ -426,6 +649,28 @@ function extractSkillName(
   }
 
   return "Teste";
+}
+
+function normalizeSkillName(
+  value: string
+) {
+  const normalized =
+    value
+      .replaceAll("-", " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const found =
+    skills.find(
+      (skill) =>
+        skill
+          .replaceAll("-", " ")
+          .toLowerCase() ===
+        normalized
+    );
+
+  return found ?? value;
 }
 
 function renderResultCard(
@@ -473,10 +718,6 @@ function renderResultCard(
   `;
 }
 
-// ============================================================
-// START
-// ============================================================
-
 async function start() {
   const playerName =
     await OBR.player.getName();
@@ -490,14 +731,9 @@ async function start() {
   currentRoomId =
     OBR.room.id;
 
-  console.log(
-    "RPG Calúnia iniciado."
-  );
+  await applySavedPopoverSize();
 
-  console.log(
-    "Room:",
-    currentRoomId
-  );
+  addResizeHandle();
 
   // ==========================================================
   // RESULTADOS DO DICE+
@@ -508,11 +744,6 @@ async function start() {
     (event) => {
       const result =
         event.data as RollResult;
-
-      console.log(
-        "Resultado recebido:",
-        result
-      );
 
       if (
         processedRolls.has(
@@ -545,10 +776,6 @@ async function start() {
       ) {
         return;
       }
-
-      // --------------------------------------------------------
-      // MESTRE
-      // --------------------------------------------------------
 
       if (
         playerRole === "GM" &&
@@ -586,18 +813,6 @@ async function start() {
           removePendingRequest(
             requestId
           );
-        } else {
-          const pending =
-            findPendingRequestByPlayerAndSkill(
-              result.playerId,
-              skillName
-            );
-
-          if (pending) {
-            removePendingRequest(
-              pending.requestId
-            );
-          }
         }
 
         renderGmHistory();
@@ -618,10 +833,6 @@ async function start() {
             `${result.playerName} — ${skillName} — ${total}`;
         }
       }
-
-      // --------------------------------------------------------
-      // JOGADOR
-      // --------------------------------------------------------
 
       if (
         playerRole !== "GM"
@@ -678,14 +889,12 @@ async function start() {
   );
 
   // ==========================================================
-  // CANCELAMENTO RECEBIDO
+  // CANCELAMENTO
   // ==========================================================
 
   OBR.broadcast.onMessage(
     LOCAL_CANCEL_CHANNEL,
     async () => {
-      
-
       await clearBadge();
 
       renderPlayerInterface(
@@ -745,7 +954,7 @@ async function start() {
 
         renderGmInterface(
           playerName,
-          players
+          currentPlayers
         );
       }
     );
@@ -798,7 +1007,7 @@ async function start() {
 }
 
 // ============================================================
-// MESTRE
+// INTERFACE DO MESTRE
 // ============================================================
 
 function renderGmInterface(
@@ -983,13 +1192,12 @@ function renderGmInterface(
           const skillName =
             button.dataset.skill!;
 
-          const existing =
+          if (
             findPendingRequestByPlayerAndSkill(
               targetPlayerId,
               skillName
-            );
-
-          if (existing) {
+            )
+          ) {
             return;
           }
 
@@ -1011,9 +1219,13 @@ function renderGmInterface(
               Date.now(),
           };
 
-          addPendingRequest(
-            request
-          );
+          if (
+            !addPendingRequest(
+              request
+            )
+          ) {
+            return;
+          }
 
           try {
             await OBR.broadcast.sendMessage(
@@ -1039,9 +1251,9 @@ function renderGmInterface(
               playerName,
               players
             );
-
           } catch (error) {
             console.error(
+              "Erro ao enviar pedido:",
               error
             );
 
@@ -1118,9 +1330,9 @@ function renderGmInterface(
               playerName,
               players
             );
-
           } catch (error) {
             console.error(
+              "Erro ao cancelar:",
               error
             );
 
@@ -1206,9 +1418,9 @@ function renderGmInterface(
                   "ALL",
               }
             );
-
           } catch (error) {
             console.error(
+              "Erro ao rolar:",
               error
             );
 
@@ -1226,6 +1438,10 @@ function renderGmInterface(
         }
       );
     });
+
+  // ==========================================================
+  // LIMPAR HISTÓRICO
+  // ==========================================================
 
   document
     .querySelector<HTMLButtonElement>(
@@ -1250,7 +1466,7 @@ function renderGmInterface(
 }
 
 // ============================================================
-// JOGADOR
+// INTERFACE DO JOGADOR
 // ============================================================
 
 function renderPlayerInterface(
@@ -1348,7 +1564,7 @@ function renderPlayerInterface(
   `;
 
   // ==========================================================
-  // PEDIDO DO MESTRE
+  // TESTE SOLICITADO
   // ==========================================================
 
   document
@@ -1440,9 +1656,9 @@ function renderPlayerInterface(
             null,
             playerId
           );
-
         } catch (error) {
           console.error(
+            "Erro ao realizar teste:",
             error
           );
 
@@ -1521,9 +1737,9 @@ function renderPlayerInterface(
                   "ALL",
               }
             );
-
           } catch (error) {
             console.error(
+              "Erro ao enviar rolagem:",
               error
             );
 
