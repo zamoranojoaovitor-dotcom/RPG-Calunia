@@ -69,19 +69,29 @@ type RollResult = {
   };
 };
 
+// Guarda o atributo associado a cada rolagem.
 const pendingRolls =
   new Map<string, string>();
 
+// Guarda qual jogador o Mestre estava rolando.
 const pendingRollPlayers =
   new Map<string, string>();
 
+// Impede processamento duplicado.
 const processedRolls =
   new Set<string>();
 
 let currentPlayers: any[] = [];
 
 // ============================================================
-// CONVERTE O NOME PARA A FORMA SEGURA DA NOTAÇÃO DO DICE+
+// NOME SEGURO PARA NOTAÇÃO DO DICE+
+// ============================================================
+//
+// Usado apenas quando quisermos colocar o nome da perícia
+// dentro da notação com "#".
+//
+// Exemplo:
+// "Sangue-Frio" -> "Sangue Frio"
 // ============================================================
 
 function getDiceSkillName(
@@ -94,7 +104,7 @@ function getDiceSkillName(
 }
 
 // ============================================================
-// TENTA RECUPERAR O NOME ORIGINAL DO ATRIBUTO
+// RECUPERAR NOME ORIGINAL DA PERÍCIA
 // ============================================================
 
 function getOriginalSkillName(
@@ -129,7 +139,7 @@ function getOriginalSkillName(
 }
 
 // ============================================================
-// LIMPA O BADGE
+// LIMPAR BADGE
 // ============================================================
 
 async function clearBadge() {
@@ -286,7 +296,7 @@ function renderGmHistory() {
 }
 
 // ============================================================
-// DESCOBRE O NOME DO TESTE NO RESULTADO DO DICE+
+// DESCOBRIR NOME DA PERÍCIA NO RESULTADO
 // ============================================================
 
 function extractSkillName(
@@ -374,7 +384,7 @@ async function start() {
   );
 
   // ==========================================================
-  // RESULTADO DO DICE+
+  // RESULTADOS DO DICE+
   // ==========================================================
 
   OBR.broadcast.onMessage(
@@ -517,7 +527,7 @@ async function start() {
   );
 
   // ==========================================================
-  // PEDIDO DE TESTE RECEBIDO
+  // PEDIDO RECEBIDO PELO JOGADOR
   // ==========================================================
 
   OBR.broadcast.onMessage(
@@ -551,11 +561,6 @@ async function start() {
     currentPlayers =
       await OBR.party.getPlayers();
 
-    console.log(
-      "Jogadores:",
-      currentPlayers
-    );
-
     renderGmInterface(
       playerName,
       currentPlayers
@@ -583,7 +588,7 @@ async function start() {
   const metadata =
     await OBR.player.getMetadata();
 
-  const pendingRequest =
+  const storedPendingRequest =
     metadata[
       METADATA_KEY
     ] as
@@ -592,7 +597,7 @@ async function start() {
 
   renderPlayerInterface(
     playerName,
-    pendingRequest ?? null,
+    storedPendingRequest ?? null,
     playerId
   );
 
@@ -634,11 +639,6 @@ function renderGmInterface(
         const skillRows =
           skills
             .map((skill) => {
-              const diceSkillName =
-                getDiceSkillName(
-                  skill.name
-                );
-
               return `
                 <div class="gm-skill-row">
 
@@ -666,7 +666,6 @@ function renderGmInterface(
                       data-player-id="${player.id}"
                       data-player-name="${escapeHtml(player.name)}"
                       data-skill="${skill.name}"
-                      data-dice-skill="${diceSkillName}"
                       data-bonus="${skill.bonus}"
                     >
                       ROLAR
@@ -812,7 +811,8 @@ function renderGmInterface(
               TEST_REQUEST_CHANNEL,
               request,
               {
-                destination: "ALL",
+                destination:
+                  "ALL",
               }
             );
 
@@ -853,9 +853,6 @@ function renderGmInterface(
           const skillName =
             button.dataset.skill!;
 
-          const diceSkillName =
-            button.dataset.diceSkill!;
-
           const bonus =
             Number(
               button.dataset.bonus
@@ -869,11 +866,13 @@ function renderGmInterface(
           const rollId =
             createRollId();
 
+          // Guarda o atributo da rolagem.
           pendingRolls.set(
             rollId,
             skillName
           );
 
+          // Guarda o jogador que o Mestre escolheu.
           pendingRollPlayers.set(
             rollId,
             targetPlayerId
@@ -881,6 +880,24 @@ function renderGmInterface(
 
           status.textContent =
             `Rolando ${skillName} de ${targetPlayerName}...`;
+
+          console.log(
+            "Rolagem do Mestre:",
+            {
+              rollId,
+              playerId:
+                targetPlayerId,
+              playerName:
+                targetPlayerName,
+              skillName,
+              bonus,
+
+              // IMPORTANTE:
+              // não colocamos #/descrição aqui.
+              diceNotation:
+                `1d20+${bonus}`,
+            }
+          );
 
           try {
             await OBR.broadcast.sendMessage(
@@ -897,8 +914,9 @@ function renderGmInterface(
                 rollTarget:
                   "gm_only",
 
+                // Notação simples e segura.
                 diceNotation:
-                  `1d20+${bonus} # ${diceSkillName}`,
+                  `1d20+${bonus}`,
 
                 showResults:
                   false,
