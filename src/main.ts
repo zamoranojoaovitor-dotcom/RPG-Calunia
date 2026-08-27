@@ -2,10 +2,30 @@ import OBR from "@owlbear-rodeo/sdk";
 import "./style.css";
 
 const EXTENSION_ID = "rpg-calunia";
-const TEST_REQUEST_CHANNEL = "rpg-calunia/test-request";
-const LOCAL_REQUEST_CHANNEL = "rpg-calunia/show-test-request";
-const METADATA_KEY = "rpg-calunia/pending-test";
-const HISTORY_STORAGE_KEY = "rpg-calunia/gm-history";
+
+const TEST_REQUEST_CHANNEL =
+  "rpg-calunia/test-request";
+
+const TEST_CANCEL_CHANNEL =
+  "rpg-calunia/test-cancel";
+
+const TEST_COMPLETED_CHANNEL =
+  "rpg-calunia/test-completed";
+
+const LOCAL_REQUEST_CHANNEL =
+  "rpg-calunia/show-test-request";
+
+const LOCAL_CANCEL_CHANNEL =
+  "rpg-calunia/show-test-cancel";
+
+const METADATA_KEY =
+  "rpg-calunia/pending-test";
+
+const HISTORY_STORAGE_PREFIX =
+  "rpg-calunia/gm-history";
+
+const PENDING_STORAGE_PREFIX =
+  "rpg-calunia/pending-requests";
 
 const skills = [
   "Raciocínio",
@@ -20,12 +40,15 @@ const skills = [
 ];
 
 type TestRequest = {
+  requestId: string;
   targetPlayerId: string;
   targetPlayerName: string;
   skillName: string;
   requesterName: string;
   timestamp: number;
 };
+
+type PendingRequest = TestRequest;
 
 type HistoryEntry = {
   playerId: string;
@@ -49,8 +72,13 @@ type RollResult = {
   rollId: string;
   playerId: string;
   playerName: string;
-  rollTarget: "everyone" | "self" | "dm" | "gm_only";
+  rollTarget:
+    | "everyone"
+    | "self"
+    | "dm"
+    | "gm_only";
   timestamp: number;
+
   result?: {
     rollId: string;
     diceNotation: string;
@@ -60,118 +88,24 @@ type RollResult = {
   };
 };
 
-const pendingRolls = new Map<string, string>();
-const pendingRollPlayers = new Map<string, string>();
-const processedRolls = new Set<string>();
+const pendingRolls =
+  new Map<string, string>();
 
-function clearBadge() {
-  return OBR.action.setBadgeText(undefined);
-}
+const pendingRollPlayers =
+  new Map<string, string>();
 
-function getGmHistory(): HistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
+const pendingRollRequestIds =
+  new Map<string, string>();
 
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const processedRolls =
+  new Set<string>();
 
-function saveGmHistory(history: HistoryEntry[]) {
-  localStorage.setItem(
-    HISTORY_STORAGE_KEY,
-    JSON.stringify(history)
-  );
-}
-
-function addGmHistory(entry: HistoryEntry) {
-  const history = getGmHistory();
-
-  history.unshift(entry);
-
-  saveGmHistory(history.slice(0, 100));
-}
-
-function clearGmHistory() {
-  localStorage.removeItem(HISTORY_STORAGE_KEY);
-  renderGmHistory();
-}
-
-function renderGmHistory() {
-  const container =
-    document.querySelector<HTMLDivElement>("#history");
-
-  if (!container) return;
-
-  const history = getGmHistory();
-
-  if (history.length === 0) {
-    container.innerHTML =
-      "<p>Nenhum teste realizado ainda.</p>";
-    return;
-  }
-
-  container.innerHTML = history
-    .map((entry) => {
-      const time = new Date(
-        entry.timestamp
-      ).toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      return `
-        <div class="history-entry">
-          <strong>
-            ${escapeHtml(entry.playerName)}
-          </strong>
-
-          <span>
-            ${escapeHtml(entry.skillName)}
-            — ${entry.total}
-          </span>
-
-          <small>
-            ${time}
-            • ${entry.source === "gm" ? "Mestre" : "Jogador"}
-          </small>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function extractSkillName(
-  result: RollResult,
-  fallback?: string
-) {
-  const groups = result.result?.groups ?? [];
-
-  const description = groups
-    .map((group) => group.description)
-    .find(
-      (value) =>
-        typeof value === "string" &&
-        value.trim().length > 0
-    );
-
-  if (description) {
-    return normalizeSkillName(description);
-  }
-
-  if (fallback) {
-    return fallback;
-  }
-
-  return "Teste";
-}
+let currentRoomId = "";
 
 function normalizeSkillName(value: string) {
   const normalized = value
     .replaceAll("-", " ")
+    .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 
@@ -185,28 +119,417 @@ function normalizeSkillName(value: string) {
   return found ?? value;
 }
 
-async function start() {
-  const playerName = await OBR.player.getName();
-  const playerRole = await OBR.player.getRole();
-  const playerId = await OBR.player.getId();
+function createId(prefix: string) {
+  return (
+    `${prefix}_${Date.now()}_` +
+    Math.random()
+      .toString(36)
+      .substring(2, 9)
+  );
+}
 
-  // ============================================================
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function clearBadge() {
+  try {
+    await OBR.action.setBadgeText(
+      undefined
+    );
+  } catch (error) {
+    console.error(
+      "Erro ao limpar badge:",
+      error
+    );
+  }
+}
+
+// ============================================================
+// HISTÓRICO
+// ============================================================
+
+function getHistoryKey() {
+  return (
+    `${HISTORY_STORAGE_PREFIX}:` +
+    currentRoomId
+  );
+}
+
+function getPendingRequestsKey() {
+  return (
+    `${PENDING_STORAGE_PREFIX}:` +
+    currentRoomId
+  );
+}
+
+function getGmHistory(): HistoryEntry[] {
+  try {
+    const raw =
+      localStorage.getItem(
+        getHistoryKey()
+      );
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGmHistory(
+  history: HistoryEntry[]
+) {
+  localStorage.setItem(
+    getHistoryKey(),
+    JSON.stringify(history)
+  );
+}
+
+function addGmHistory(
+  entry: HistoryEntry
+) {
+  const history =
+    getGmHistory();
+
+  history.unshift(entry);
+
+  saveGmHistory(
+    history.slice(0, 100)
+  );
+}
+
+function clearGmHistory() {
+  localStorage.removeItem(
+    getHistoryKey()
+  );
+
+  renderGmHistory();
+}
+
+function renderGmHistory() {
+  const container =
+    document.querySelector<HTMLDivElement>(
+      "#history"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const history =
+    getGmHistory();
+
+  if (history.length === 0) {
+    container.innerHTML =
+      "<p>Nenhum teste realizado ainda.</p>";
+
+    return;
+  }
+
+  container.innerHTML =
+    history
+      .map((entry) => {
+        const time =
+          new Date(
+            entry.timestamp
+          ).toLocaleTimeString(
+            "pt-BR",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+            }
+          );
+
+        return `
+          <div class="history-entry">
+            <strong>
+              ${escapeHtml(
+                entry.playerName
+              )}
+            </strong>
+
+            <span>
+              ${escapeHtml(
+                entry.skillName
+              )}
+              — ${entry.total}
+            </span>
+
+            <small>
+              ${time}
+              • ${
+                entry.source === "gm"
+                  ? "Mestre"
+                  : "Jogador"
+              }
+            </small>
+          </div>
+        `;
+      })
+      .join("");
+}
+
+// ============================================================
+// PEDIDOS
+// ============================================================
+
+function getPendingRequests(): PendingRequest[] {
+  try {
+    const raw =
+      localStorage.getItem(
+        getPendingRequestsKey()
+      );
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingRequests(
+  requests: PendingRequest[]
+) {
+  localStorage.setItem(
+    getPendingRequestsKey(),
+    JSON.stringify(requests)
+  );
+}
+
+function addPendingRequest(
+  request: PendingRequest
+) {
+  const requests =
+    getPendingRequests();
+
+  const alreadyExists =
+    requests.some(
+      (item) =>
+        item.targetPlayerId ===
+          request.targetPlayerId &&
+        item.skillName ===
+          request.skillName
+    );
+
+  if (alreadyExists) {
+    return false;
+  }
+
+  requests.push(request);
+
+  savePendingRequests(requests);
+
+  return true;
+}
+
+function removePendingRequest(
+  requestId: string
+) {
+  const requests =
+    getPendingRequests();
+
+  const filtered =
+    requests.filter(
+      (request) =>
+        request.requestId !==
+        requestId
+    );
+
+  savePendingRequests(
+    filtered
+  );
+}
+
+function findPendingRequestByPlayerAndSkill(
+  playerId: string,
+  skillName: string
+) {
+  return getPendingRequests()
+    .find(
+      (request) =>
+        request.targetPlayerId ===
+          playerId &&
+        request.skillName ===
+          skillName
+    );
+}
+
+// ============================================================
+// RESULTADO
+// ============================================================
+
+function extractSkillName(
+  result: RollResult,
+  fallback?: string
+) {
+  const groups =
+    result.result?.groups ?? [];
+
+  const description =
+    groups
+      .map(
+        (group) =>
+          group.description
+      )
+      .find(
+        (value) =>
+          typeof value ===
+            "string" &&
+          value.trim().length >
+            0
+      );
+
+  if (description) {
+    return normalizeSkillName(
+      description
+    );
+  }
+
+  const notation =
+    result.result?.diceNotation ??
+    "";
+
+  if (notation.includes("#")) {
+    return normalizeSkillName(
+      notation
+        .split("#")
+        .slice(1)
+        .join("#")
+        .trim()
+    );
+  }
+
+  if (fallback) {
+    return fallback;
+  }
+
+  return "Teste";
+}
+
+function renderResultCard(
+  playerName: string,
+  skillName: string,
+  total: number
+) {
+  const container =
+    document.querySelector<HTMLDivElement>(
+      "#result-card"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="result-card">
+
+      <div class="result-icon">
+        🎲
+      </div>
+
+      <div class="result-content">
+
+        <strong>
+          ${escapeHtml(
+            skillName
+          )}
+        </strong>
+
+        <span>
+          ${escapeHtml(
+            playerName
+          )}
+        </span>
+
+      </div>
+
+      <div class="result-total">
+        ${total}
+      </div>
+
+    </div>
+  `;
+}
+
+// ============================================================
+// START
+// ============================================================
+
+async function start() {
+  const playerName =
+    await OBR.player.getName();
+
+  const playerRole =
+    await OBR.player.getRole();
+
+  const playerId =
+    await OBR.player.getId();
+
+  currentRoomId =
+    OBR.room.id;
+
+  console.log(
+    "RPG Calúnia iniciado."
+  );
+
+  console.log(
+    "Room:",
+    currentRoomId
+  );
+
+  // ==========================================================
   // RESULTADOS DO DICE+
-  // ============================================================
+  // ==========================================================
 
   OBR.broadcast.onMessage(
     `${EXTENSION_ID}/roll-result`,
     (event) => {
-      const result = event.data as RollResult;
+      const result =
+        event.data as RollResult;
 
-      if (processedRolls.has(result.rollId)) {
+      console.log(
+        "Resultado recebido:",
+        result
+      );
+
+      if (
+        processedRolls.has(
+          result.rollId
+        )
+      ) {
         return;
       }
 
-      processedRolls.add(result.rollId);
+      processedRolls.add(
+        result.rollId
+      );
 
       const fallbackSkill =
-        pendingRolls.get(result.rollId);
+        pendingRolls.get(
+          result.rollId
+        );
 
       const skillName =
         extractSkillName(
@@ -217,49 +540,126 @@ async function start() {
       const total =
         result.result?.totalValue;
 
-      if (total === undefined) return;
+      if (
+        total === undefined
+      ) {
+        return;
+      }
 
-      const status =
-        document.querySelector<HTMLParagraphElement>(
-          "#status"
-        );
+      // --------------------------------------------------------
+      // MESTRE
+      // --------------------------------------------------------
 
-      if (playerRole === "GM") {
+      if (
+        playerRole === "GM" &&
+        result.rollTarget ===
+          "gm_only"
+      ) {
+        const requestId =
+          pendingRollRequestIds.get(
+            result.rollId
+          );
+
         const source =
-          pendingRollPlayers.has(result.rollId)
-            ? "gm"
-            : "player";
+          requestId
+            ? "player"
+            : "gm";
 
         addGmHistory({
-          playerId: result.playerId,
-          playerName: result.playerName,
+          playerId:
+            result.playerId,
+
+          playerName:
+            result.playerName,
+
           skillName,
+
           total,
+
           source,
-          timestamp: Date.now(),
+
+          timestamp:
+            Date.now(),
         });
+
+        if (requestId) {
+          removePendingRequest(
+            requestId
+          );
+        } else {
+          const pending =
+            findPendingRequestByPlayerAndSkill(
+              result.playerId,
+              skillName
+            );
+
+          if (pending) {
+            removePendingRequest(
+              pending.requestId
+            );
+          }
+        }
 
         renderGmHistory();
 
-        if (status) {
-          status.textContent =
-            `${result.playerName} — ${skillName} — ${total}`;
-        }
-      } else {
+        renderResultCard(
+          result.playerName,
+          skillName,
+          total
+        );
+
+        const status =
+          document.querySelector<HTMLParagraphElement>(
+            "#status"
+          );
+
         if (status) {
           status.textContent =
             `${result.playerName} — ${skillName} — ${total}`;
         }
       }
 
-      pendingRolls.delete(result.rollId);
-      pendingRollPlayers.delete(result.rollId);
+      // --------------------------------------------------------
+      // JOGADOR
+      // --------------------------------------------------------
+
+      if (
+        playerRole !== "GM"
+      ) {
+        renderResultCard(
+          result.playerName,
+          skillName,
+          total
+        );
+
+        const status =
+          document.querySelector<HTMLParagraphElement>(
+            "#status"
+          );
+
+        if (status) {
+          status.textContent =
+            "Teste realizado.";
+        }
+      }
+
+      pendingRolls.delete(
+        result.rollId
+      );
+
+      pendingRollPlayers.delete(
+        result.rollId
+      );
+
+      pendingRollRequestIds.delete(
+        result.rollId
+      );
     }
   );
 
-  // ============================================================
+  // ==========================================================
   // PEDIDO RECEBIDO
-  // ============================================================
+  // ==========================================================
 
   OBR.broadcast.onMessage(
     LOCAL_REQUEST_CHANNEL,
@@ -277,11 +677,42 @@ async function start() {
     }
   );
 
-  // ============================================================
-  // MESTRE
-  // ============================================================
+  // ==========================================================
+  // CANCELAMENTO RECEBIDO
+  // ==========================================================
 
-  if (playerRole === "GM") {
+  OBR.broadcast.onMessage(
+    LOCAL_CANCEL_CHANNEL,
+    async () => {
+      
+
+      await clearBadge();
+
+      renderPlayerInterface(
+        playerName,
+        null,
+        playerId
+      );
+
+      const status =
+        document.querySelector<HTMLParagraphElement>(
+          "#status"
+        );
+
+      if (status) {
+        status.textContent =
+          "O Mestre cancelou o teste.";
+      }
+    }
+  );
+
+  // ==========================================================
+  // MODO MESTRE
+  // ==========================================================
+
+  if (
+    playerRole === "GM"
+  ) {
     const players =
       await OBR.party.getPlayers();
 
@@ -299,24 +730,46 @@ async function start() {
       }
     );
 
+    OBR.broadcast.onMessage(
+      TEST_COMPLETED_CHANNEL,
+      (event) => {
+        const data =
+          event.data as {
+            requestId: string;
+            playerId: string;
+          };
+
+        removePendingRequest(
+          data.requestId
+        );
+
+        renderGmInterface(
+          playerName,
+          players
+        );
+      }
+    );
+
     return;
   }
 
-  // ============================================================
-  // JOGADOR
-  // ============================================================
+  // ==========================================================
+  // MODO JOGADOR
+  // ==========================================================
 
   const metadata =
     await OBR.player.getMetadata();
 
-  const pendingRequest =
-    metadata[METADATA_KEY] as
+  const storedRequest =
+    metadata[
+      METADATA_KEY
+    ] as
       | TestRequest
       | undefined;
 
   renderPlayerInterface(
     playerName,
-    pendingRequest ?? null,
+    storedRequest ?? null,
     playerId
   );
 
@@ -330,7 +783,9 @@ async function start() {
           | undefined;
 
       if (updatedRequest) {
-        OBR.action.setBadgeText("!");
+        OBR.action.setBadgeText(
+          "!"
+        );
 
         renderPlayerInterface(
           playerName,
@@ -350,48 +805,84 @@ function renderGmInterface(
   playerName: string,
   players: any[]
 ) {
+  const pending =
+    getPendingRequests();
+
   const playerCards =
     players
       .map((player) => {
-        const rows = skills
-          .map(
-            (skill) => `
-              <div class="gm-skill-row">
-                <span>
-                  ${escapeHtml(skill)}
-                </span>
+        const rows =
+          skills
+            .map((skill) => {
+              const pendingRequest =
+                pending.find(
+                  (request) =>
+                    request.targetPlayerId ===
+                      player.id &&
+                    request.skillName ===
+                      skill
+                );
 
-                <div>
-                  <button
-                    class="request-button"
-                    data-player-id="${player.id}"
-                    data-player-name="${escapeHtml(player.name)}"
-                    data-skill="${escapeHtml(skill)}"
-                  >
-                    PEDIR
-                  </button>
+              return `
+                <div class="gm-skill-row">
 
-                  <button
-                    class="gm-roll-button"
-                    data-player-id="${player.id}"
-                    data-player-name="${escapeHtml(player.name)}"
-                    data-skill="${escapeHtml(skill)}"
-                  >
-                    ROLAR
-                  </button>
+                  <span>
+                    ${escapeHtml(
+                      skill
+                    )}
+                  </span>
+
+                  <div>
+
+                    ${
+                      pendingRequest
+                        ? `
+                          <button
+                            class="cancel-request-button"
+                            data-request-id="${pendingRequest.requestId}"
+                          >
+                            CANCELAR
+                          </button>
+                        `
+                        : `
+                          <button
+                            class="request-button"
+                            data-player-id="${player.id}"
+                            data-player-name="${escapeHtml(player.name)}"
+                            data-skill="${escapeHtml(skill)}"
+                          >
+                            PEDIR
+                          </button>
+                        `
+                    }
+
+                    <button
+                      class="gm-roll-button"
+                      data-player-id="${player.id}"
+                      data-player-name="${escapeHtml(player.name)}"
+                      data-skill="${escapeHtml(skill)}"
+                    >
+                      ROLAR
+                    </button>
+
+                  </div>
+
                 </div>
-              </div>
-            `
-          )
-          .join("");
+              `;
+            })
+            .join("");
 
         return `
           <div class="player-card">
+
             <h3>
-              ${escapeHtml(player.name)}
+              ${escapeHtml(
+                player.name
+              )}
             </h3>
 
             ${rows}
+
           </div>
         `;
       })
@@ -401,31 +892,50 @@ function renderGmInterface(
     "#app"
   )!.innerHTML = `
     <div class="app">
-      <h1>RPG Calúnia</h1>
+
+      <h1>
+        RPG Calúnia
+      </h1>
 
       <p>
         Jogador:
-        <strong>${escapeHtml(playerName)}</strong>
+        <strong>
+          ${escapeHtml(
+            playerName
+          )}
+        </strong>
       </p>
 
       <p>
         Função:
-        <strong>Mestre</strong>
+        <strong>
+          Mestre
+        </strong>
       </p>
 
       <hr />
 
-      <h2>Jogadores</h2>
+      <h2>
+        Jogadores
+      </h2>
 
       ${
         players.length
           ? playerCards
-          : "<p>Nenhum jogador conectado.</p>"
+          : `
+            <p>
+              Nenhum jogador conectado.
+            </p>
+          `
       }
 
       <hr />
 
-      <h2>Último resultado</h2>
+      <h2>
+        Último resultado
+      </h2>
+
+      <div id="result-card"></div>
 
       <p id="status">
         Aguardando...
@@ -434,14 +944,19 @@ function renderGmInterface(
       <hr />
 
       <div class="history-header">
-        <h2>Histórico secreto</h2>
+
+        <h2>
+          Histórico secreto
+        </h2>
 
         <button id="clear-history">
           LIMPAR
         </button>
+
       </div>
 
       <div id="history"></div>
+
     </div>
   `;
 
@@ -459,15 +974,35 @@ function renderGmInterface(
       button.addEventListener(
         "click",
         async () => {
-          const request: TestRequest = {
-            targetPlayerId:
-              button.dataset.playerId!,
+          const targetPlayerId =
+            button.dataset.playerId!;
 
-            targetPlayerName:
-              button.dataset.playerName!,
+          const targetPlayerName =
+            button.dataset.playerName!;
 
-            skillName:
-              button.dataset.skill!,
+          const skillName =
+            button.dataset.skill!;
+
+          const existing =
+            findPendingRequestByPlayerAndSkill(
+              targetPlayerId,
+              skillName
+            );
+
+          if (existing) {
+            return;
+          }
+
+          const request:
+            TestRequest = {
+            requestId:
+              createId("request"),
+
+            targetPlayerId,
+
+            targetPlayerName,
+
+            skillName,
 
             requesterName:
               playerName,
@@ -476,26 +1011,122 @@ function renderGmInterface(
               Date.now(),
           };
 
-          const status =
-            document.querySelector<HTMLParagraphElement>(
-              "#status"
-            )!;
+          addPendingRequest(
+            request
+          );
 
           try {
             await OBR.broadcast.sendMessage(
               TEST_REQUEST_CHANNEL,
               request,
               {
-                destination: "ALL",
+                destination:
+                  "ALL",
               }
             );
 
-            status.textContent =
-              `Teste de ${request.skillName} enviado para ${request.targetPlayerName}.`;
+            const status =
+              document.querySelector<HTMLParagraphElement>(
+                "#status"
+              );
 
-          } catch {
-            status.textContent =
-              "Erro ao enviar o teste.";
+            if (status) {
+              status.textContent =
+                `Teste de ${skillName} enviado para ${targetPlayerName}.`;
+            }
+
+            renderGmInterface(
+              playerName,
+              players
+            );
+
+          } catch (error) {
+            console.error(
+              error
+            );
+
+            removePendingRequest(
+              request.requestId
+            );
+
+            const status =
+              document.querySelector<HTMLParagraphElement>(
+                "#status"
+              );
+
+            if (status) {
+              status.textContent =
+                "Erro ao enviar o teste.";
+            }
+          }
+        }
+      );
+    });
+
+  // ==========================================================
+  // CANCELAR
+  // ==========================================================
+
+  document
+    .querySelectorAll<HTMLButtonElement>(
+      ".cancel-request-button"
+    )
+    .forEach((button) => {
+      button.addEventListener(
+        "click",
+        async () => {
+          const requestId =
+            button.dataset.requestId!;
+
+          const request =
+            getPendingRequests()
+              .find(
+                (item) =>
+                  item.requestId ===
+                  requestId
+              );
+
+          if (!request) {
+            return;
+          }
+
+          removePendingRequest(
+            requestId
+          );
+
+          try {
+            await OBR.broadcast.sendMessage(
+              TEST_CANCEL_CHANNEL,
+              request,
+              {
+                destination:
+                  "ALL",
+              }
+            );
+
+            const status =
+              document.querySelector<HTMLParagraphElement>(
+                "#status"
+              );
+
+            if (status) {
+              status.textContent =
+                `Teste de ${request.skillName} cancelado para ${request.targetPlayerName}.`;
+            }
+
+            renderGmInterface(
+              playerName,
+              players
+            );
+
+          } catch (error) {
+            console.error(
+              error
+            );
+
+            addPendingRequest(
+              request
+            );
           }
         }
       );
@@ -528,7 +1159,7 @@ function renderGmInterface(
             )!;
 
           const rollId =
-            createRollId();
+            createId("roll");
 
           pendingRolls.set(
             rollId,
@@ -571,10 +1202,16 @@ function renderGmInterface(
                   EXTENSION_ID,
               },
               {
-                destination: "ALL",
+                destination:
+                  "ALL",
               }
             );
-          } catch {
+
+          } catch (error) {
+            console.error(
+              error
+            );
+
             pendingRolls.delete(
               rollId
             );
@@ -598,6 +1235,16 @@ function renderGmInterface(
       "click",
       () => {
         clearGmHistory();
+
+        const status =
+          document.querySelector<HTMLParagraphElement>(
+            "#status"
+          );
+
+        if (status) {
+          status.textContent =
+            "Histórico limpo.";
+        }
       }
     );
 }
@@ -619,9 +1266,13 @@ function renderPlayerInterface(
         (skill) =>
           `<button
             class="skill-button"
-            data-skill="${escapeHtml(skill)}"
+            data-skill="${escapeHtml(
+              skill
+            )}"
           >
-            ${escapeHtml(skill)}
+            ${escapeHtml(
+              skill
+            )}
           </button>`
       )
       .join("");
@@ -630,25 +1281,31 @@ function renderPlayerInterface(
     "#app"
   )!.innerHTML = `
     <div class="app">
-      <h1>RPG Calúnia</h1>
+
+      <h1>
+        RPG Calúnia
+      </h1>
 
       <p>
         Jogador:
         <strong>
-          ${escapeHtml(playerName)}
+          ${escapeHtml(
+            playerName
+          )}
         </strong>
       </p>
 
       <p>
         Função:
-        <strong>Jogador</strong>
+        <strong>
+          Jogador
+        </strong>
       </p>
 
       ${
         pendingRequest
           ? `
             <div class="pending-test">
-              <hr />
 
               <h2>
                 🔔 TESTE SOLICITADO
@@ -664,9 +1321,12 @@ function renderPlayerInterface(
                 )}
               </h3>
 
-              <button id="requested-roll">
+              <button
+                id="requested-roll"
+              >
                 ROLAR
               </button>
+
             </div>
           `
           : ""
@@ -674,11 +1334,16 @@ function renderPlayerInterface(
 
       <hr />
 
-      <h2>Meus testes</h2>
+      <h2>
+        Meus testes
+      </h2>
 
       ${buttons}
 
+      <div id="result-card"></div>
+
       <p id="status"></p>
+
     </div>
   `;
 
@@ -698,11 +1363,16 @@ function renderPlayerInterface(
         }
 
         const rollId =
-          createRollId();
+          createId("roll");
 
         pendingRolls.set(
           rollId,
           pendingRequest.skillName
+        );
+
+        pendingRollRequestIds.set(
+          rollId,
+          pendingRequest.requestId
         );
 
         const status =
@@ -751,14 +1421,36 @@ function renderPlayerInterface(
 
           await clearBadge();
 
+          await OBR.broadcast.sendMessage(
+            TEST_COMPLETED_CHANNEL,
+            {
+              requestId:
+                pendingRequest.requestId,
+
+              playerId,
+            },
+            {
+              destination:
+                "ALL",
+            }
+          );
+
           renderPlayerInterface(
             playerName,
             null,
             playerId
           );
 
-        } catch {
+        } catch (error) {
+          console.error(
+            error
+          );
+
           pendingRolls.delete(
+            rollId
+          );
+
+          pendingRollRequestIds.delete(
             rollId
           );
 
@@ -784,7 +1476,7 @@ function renderPlayerInterface(
             button.dataset.skill!;
 
           const rollId =
-            createRollId();
+            createId("roll");
 
           pendingRolls.set(
             rollId,
@@ -829,7 +1521,12 @@ function renderPlayerInterface(
                   "ALL",
               }
             );
-          } catch {
+
+          } catch (error) {
+            console.error(
+              error
+            );
+
             pendingRolls.delete(
               rollId
             );
@@ -840,30 +1537,6 @@ function renderPlayerInterface(
         }
       );
     });
-}
-
-// ============================================================
-// AUXILIARES
-// ============================================================
-
-function createRollId() {
-  return (
-    `roll_${Date.now()}_` +
-    Math.random()
-      .toString(36)
-      .substring(2, 9)
-  );
-}
-
-function escapeHtml(
-  value: string
-) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 OBR.onReady(start);

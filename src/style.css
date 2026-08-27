@@ -17,7 +17,6 @@
 
 body {
   margin: 0;
-  min-width: 0;
   background: #111827;
   color: #f3f4f6;
 }
@@ -36,7 +35,6 @@ button {
 h1 {
   margin: 0 0 16px;
   font-size: 24px;
-  font-weight: 800;
 }
 
 h2 {
@@ -66,7 +64,7 @@ hr {
 .skill-button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
 
   width: 100%;
   margin: 8px 0;
@@ -81,13 +79,11 @@ hr {
   cursor: pointer;
   transition:
     transform 0.08s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background 0.15s ease;
 }
 
 .skill-button:hover {
   background: #273449;
-  border-color: #6b7280;
 }
 
 .skill-button:active {
@@ -95,7 +91,7 @@ hr {
 }
 
 /* ============================================================
-   TESTE SOLICITADO
+   PEDIDO
    ============================================================ */
 
 .pending-test {
@@ -170,19 +166,20 @@ hr {
 
 .gm-skill-row > div {
   display: flex;
-  gap: 6px;
+  gap: 5px;
 }
 
 .request-button,
-.gm-roll-button {
-  padding: 7px 9px;
+.gm-roll-button,
+.cancel-request-button {
+  padding: 7px 8px;
 
   border: 0;
   border-radius: 7px;
 
   color: white;
 
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
 
   cursor: pointer;
@@ -204,6 +201,57 @@ hr {
   background: #6d28d9;
 }
 
+.cancel-request-button {
+  background: #dc2626;
+}
+
+.cancel-request-button:hover {
+  background: #b91c1c;
+}
+
+/* ============================================================
+   RESULTADO
+   ============================================================ */
+
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin: 10px 0;
+  padding: 12px;
+
+  border: 1px solid #4b5563;
+  border-radius: 12px;
+
+  background: #1f2937;
+}
+
+.result-icon {
+  font-size: 24px;
+}
+
+.result-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.result-content strong {
+  font-size: 15px;
+}
+
+.result-content span {
+  margin-top: 2px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.result-total {
+  font-size: 26px;
+  font-weight: 900;
+}
+
 /* ============================================================
    HISTÓRICO
    ============================================================ */
@@ -212,7 +260,6 @@ hr {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
 }
 
 #clear-history {
@@ -230,10 +277,6 @@ hr {
   cursor: pointer;
 }
 
-#clear-history:hover {
-  background: #1f2937;
-}
-
 .history-entry {
   display: flex;
   flex-direction: column;
@@ -245,10 +288,6 @@ hr {
   border-radius: 6px;
 
   background: #1f2937;
-}
-
-.history-entry strong {
-  font-size: 14px;
 }
 
 .history-entry span {
@@ -290,7 +329,8 @@ hr {
   }
 
   .request-button,
-  .gm-roll-button {
+  .gm-roll-button,
+  .cancel-request-button {
     flex: 1;
   }
 }

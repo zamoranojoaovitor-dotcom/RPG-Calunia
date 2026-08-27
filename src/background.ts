@@ -1,18 +1,25 @@
 import OBR from "@owlbear-rodeo/sdk";
 
-const REQUEST_CHANNEL = "rpg-calunia/test-request";
+const REQUEST_CHANNEL =
+  "rpg-calunia/test-request";
+
+const CANCEL_CHANNEL =
+  "rpg-calunia/test-cancel";
 
 const LOCAL_REQUEST_CHANNEL =
   "rpg-calunia/show-test-request";
+
+const LOCAL_CANCEL_CHANNEL =
+  "rpg-calunia/show-test-cancel";
 
 const METADATA_KEY =
   "rpg-calunia/pending-test";
 
 type TestRequest = {
+  requestId: string;
   targetPlayerId: string;
   targetPlayerName: string;
   skillName: string;
-  bonus: number;
   requesterName: string;
   timestamp: number;
 };
@@ -34,7 +41,9 @@ async function showBadge() {
 
 async function clearBadge() {
   try {
-    await OBR.action.setBadgeText(undefined);
+    await OBR.action.setBadgeText(
+      undefined
+    );
   } catch (error) {
     console.error(
       "Erro ao limpar badge:",
@@ -64,8 +73,9 @@ async function start() {
     playerRole
   );
 
-  // Não definimos mais o ícone por código.
-  // O manifest.json será responsável pelo ícone inicial.
+  // ============================================================
+  // RECEBER PEDIDOS
+  // ============================================================
 
   OBR.broadcast.onMessage(
     REQUEST_CHANNEL,
@@ -86,11 +96,12 @@ async function start() {
       }
 
       console.log(
-        `TESTE SOLICITADO: ${request.skillName} +${request.bonus}`
+        `TESTE SOLICITADO: ${request.skillName}`
       );
 
       await OBR.player.setMetadata({
-        [METADATA_KEY]: request,
+        [METADATA_KEY]:
+          request,
       });
 
       await showBadge();
@@ -99,18 +110,81 @@ async function start() {
         LOCAL_REQUEST_CHANNEL,
         request,
         {
-          destination: "LOCAL",
+          destination:
+            "LOCAL",
         }
       );
     }
   );
+
+  // ============================================================
+  // RECEBER CANCELAMENTO
+  // ============================================================
+
+  OBR.broadcast.onMessage(
+    CANCEL_CHANNEL,
+    async (event) => {
+      const request =
+        event.data as TestRequest;
+
+      console.log(
+        "Cancelamento recebido:",
+        request
+      );
+
+      if (
+        request.targetPlayerId !==
+        playerId
+      ) {
+        return;
+      }
+
+      const metadata =
+        await OBR.player.getMetadata();
+
+      const currentRequest =
+        metadata[
+          METADATA_KEY
+        ] as
+          | TestRequest
+          | undefined;
+
+      // Só apagamos se for o mesmo pedido.
+      if (
+        currentRequest?.requestId ===
+        request.requestId
+      ) {
+        await OBR.player.setMetadata({
+          [METADATA_KEY]:
+            undefined,
+        });
+
+        await clearBadge();
+
+        await OBR.broadcast.sendMessage(
+          LOCAL_CANCEL_CHANNEL,
+          request,
+          {
+            destination:
+              "LOCAL",
+          }
+        );
+      }
+    }
+  );
+
+  // ============================================================
+  // OBSERVAR METADATA
+  // ============================================================
 
   OBR.player.onChange(
     async (player) => {
       const pendingRequest =
         player.metadata[
           METADATA_KEY
-        ] as TestRequest | undefined;
+        ] as
+          | TestRequest
+          | undefined;
 
       if (!pendingRequest) {
         await clearBadge();
