@@ -8,7 +8,7 @@
     sans-serif;
 
   color: #f3f4f6;
-  background: #111827;
+  background: #111318;
 }
 
 * {
@@ -17,11 +17,20 @@
 
 html,
 body {
-  margin: 0;
   width: 100%;
   min-width: 0;
   min-height: 100%;
-  background: #111827;
+
+  margin: 0;
+
+  background:
+    radial-gradient(
+      circle at top,
+      #242938 0%,
+      #15171d 38%,
+      #0f1115 100%
+    );
+
   color: #f3f4f6;
 }
 
@@ -38,166 +47,343 @@ button {
   font: inherit;
 }
 
+button:focus-visible {
+  outline: 2px solid #f472b6;
+  outline-offset: 2px;
+}
+
 .app {
   width: 100%;
   max-width: 650px;
+
   margin: 0 auto;
-  padding: 16px 16px 32px;
-}
 
-h1 {
-  margin: 0 0 16px;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-h2 {
-  margin: 16px 0 10px;
-  font-size: 16px;
-}
-
-h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-p {
-  margin: 6px 0;
-}
-
-hr {
-  margin: 16px 0;
-  border: 0;
-  border-top: 1px solid #374151;
+  padding: 18px 16px 34px;
 }
 
 /* ============================================================
-   TESTES DO JOGADOR
+   CABEÇALHO
    ============================================================ */
 
-.skill-button {
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 14px;
+}
+
+.eyebrow {
+  margin-bottom: 4px;
+
+  color: #f472b6;
+
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.app-header h1 {
+  margin: 0;
+
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.header-player {
+  margin-top: 6px;
+
+  color: #a9afbd;
+
+  font-size: 12px;
+}
+
+/* ============================================================
+   ABAS
+   ============================================================ */
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  gap: 6px;
+
+  margin-bottom: 16px;
+
+  padding: 4px;
+
+  border: 1px solid #313744;
+  border-radius: 12px;
+
+  background: #171a21;
+}
+
+.tab-button {
+  min-height: 36px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: transparent;
+  color: #9ca3af;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: #2a2f3b;
+  color: #ffffff;
+}
+
+/* ============================================================
+   SEÇÕES
+   ============================================================ */
+
+.tab-content {
+  animation:
+    fade-in 0.12s ease;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin-bottom: 12px;
+}
+
+.section-heading h2 {
+  margin: 0;
+
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.section-heading p {
+  margin: 4px 0 0;
+
+  color: #8f96a5;
+
+  font-size: 11px;
+}
+
+.player-count {
+  min-width: 30px;
+  height: 30px;
+
   display: flex;
   align-items: center;
   justify-content: center;
 
-  width: 100%;
-  margin: 8px 0;
-  padding: 12px 14px;
+  border-radius: 999px;
 
-  border: 1px solid #374151;
-  border-radius: 10px;
+  background: #2c3140;
+  color: #ffffff;
 
-  background: #1f2937;
-  color: #f9fafb;
-
-  cursor: pointer;
-
-  transition:
-    transform 0.08s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.skill-button:hover {
-  background: #273449;
-  border-color: #6b7280;
-}
-
-.skill-button:active {
-  transform: scale(0.98);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 /* ============================================================
-   PEDIDO
+   PLAYERS / ACCORDION
    ============================================================ */
 
-.pending-test {
-  padding: 14px;
+.player-accordion {
+  overflow: hidden;
 
-  border: 1px solid #f472b6;
-  border-radius: 12px;
+  margin: 8px 0;
 
-  background: #3b102a;
+  border: 1px solid #323744;
+  border-radius: 14px;
+
+  background: #191c23;
+
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
-.pending-test h2 {
-  margin-top: 0;
-}
+.player-header {
+  display: flex;
+  align-items: center;
 
-#requested-roll {
   width: 100%;
-  margin-top: 12px;
-  padding: 12px;
+
+  min-height: 60px;
+
+  padding: 10px 12px;
 
   border: 0;
-  border-radius: 10px;
 
-  background: #ec4899;
-  color: white;
+  background: transparent;
+  color: #ffffff;
 
-  font-weight: 800;
+  text-align: left;
+
   cursor: pointer;
 }
 
-#requested-roll:hover {
-  background: #db2777;
+.player-header:hover {
+  background: #20242d;
+}
+
+.player-chevron {
+  width: 24px;
+
+  color: #9ca3af;
+
+  font-size: 26px;
+  line-height: 1;
+
+  text-align: center;
+}
+
+.player-avatar {
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-left: 4px;
+  margin-right: 10px;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ec4899,
+      #7c3aed
+    );
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.player-name-block {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1;
+
+  min-width: 0;
+}
+
+.player-name-block strong {
+  overflow: hidden;
+
+  font-size: 14px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.player-name-block small {
+  margin-top: 3px;
+
+  color: #89919f;
+
+  font-size: 10px;
+}
+
+.pending-dot {
+  min-width: 22px;
+  height: 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #ec4899;
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 900;
 }
 
 /* ============================================================
-   MESTRE
+   CONTEÚDO DO PLAYER
    ============================================================ */
 
-.player-card {
-  margin: 12px 0;
-  padding: 14px;
+.player-content {
+  padding: 0 12px 12px;
 
-  border: 1px solid #374151;
-  border-radius: 12px;
-
-  background: #1f2937;
-}
-
-.player-card h3 {
-  margin-bottom: 12px;
+  border-top: 1px solid #2e3440;
 }
 
 .gm-skill-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   gap: 8px;
 
-  padding: 9px 0;
+  padding: 10px 0;
 
-  border-top: 1px solid #374151;
+  border-bottom: 1px solid #2a2f39;
 }
 
-.gm-skill-row:first-of-type {
-  border-top: 0;
+.gm-skill-row:last-child {
+  border-bottom: 0;
 }
 
-.gm-skill-row > span {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.gm-skill-row > div {
+.skill-info {
   display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  min-width: 0;
+}
+
+.skill-icon {
+  width: 24px;
+
+  font-size: 16px;
+  text-align: center;
+}
+
+.skill-info > span:last-child {
+  overflow: hidden;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.skill-actions {
+  display: flex;
+
   gap: 5px;
 }
 
 .request-button,
 .gm-roll-button,
 .cancel-request-button {
+  min-width: 57px;
+
   padding: 7px 8px;
 
   border: 0;
   border-radius: 7px;
 
-  color: white;
+  color: #ffffff;
 
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 900;
 
   cursor: pointer;
 }
@@ -227,102 +413,407 @@ hr {
 }
 
 /* ============================================================
+   TESTES DO JOGADOR
+   ============================================================ */
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+.skill-button {
+  display: grid;
+
+  grid-template-columns:
+    34px
+    1fr
+    20px;
+
+  align-items: center;
+
+  width: 100%;
+  min-height: 52px;
+
+  padding: 8px 12px;
+
+  border: 1px solid #343a47;
+  border-radius: 12px;
+
+  background: #1a1e26;
+  color: #f9fafb;
+
+  cursor: pointer;
+
+  text-align: left;
+
+  transition:
+    transform 0.08s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.skill-button:hover {
+  background: #212631;
+
+  border-color: #4b5563;
+}
+
+.skill-button:active {
+  transform: scale(0.985);
+}
+
+.skill-icon {
+  font-size: 18px;
+}
+
+.skill-label {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.skill-arrow {
+  color: #777f8e;
+
+  font-size: 16px;
+  text-align: right;
+}
+
+/* ============================================================
+   PEDIDO
+   ============================================================ */
+
+.pending-test {
+  margin-bottom: 16px;
+
+  padding: 15px;
+
+  border: 1px solid #e85c9f;
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #38162d,
+      #241620
+    );
+
+  box-shadow:
+    0 8px 20px rgba(236, 72, 153, 0.12);
+}
+
+.pending-top {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  margin-bottom: 10px;
+
+  color: #f9a8d4;
+
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.pending-test p {
+  margin: 5px 0;
+
+  color: #c6cad3;
+
+  font-size: 12px;
+}
+
+.pending-test h3 {
+  margin: 8px 0;
+
+  font-size: 20px;
+}
+
+.primary-action {
+  width: 100%;
+
+  margin-top: 10px;
+
+  padding: 12px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: #ec4899;
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+.primary-action:hover {
+  background: #db2777;
+}
+
+/* ============================================================
    RESULTADO
    ============================================================ */
+
+.latest-section {
+  margin-top: 22px;
+}
 
 .result-card {
   display: flex;
   align-items: center;
-  gap: 10px;
 
-  margin: 10px 0;
-  padding: 12px;
+  gap: 11px;
 
-  border: 1px solid #4b5563;
-  border-radius: 12px;
+  margin-top: 10px;
 
-  background: #1f2937;
+  padding: 13px;
+
+  border: 1px solid #363d4b;
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #20252f,
+      #171a21
+    );
+
+  animation:
+    result-in 0.18s ease;
 }
 
-.result-icon {
-  font-size: 24px;
+.result-icon-big {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 12px;
+
+  background: #2a2f3a;
+
+  font-size: 22px;
 }
 
 .result-content {
   display: flex;
   flex-direction: column;
+
   flex: 1;
+
+  min-width: 0;
 }
 
 .result-content strong {
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .result-content span {
-  margin-top: 2px;
-  color: #9ca3af;
-  font-size: 12px;
+  margin-top: 3px;
+
+  color: #9098a7;
+
+  font-size: 11px;
 }
 
 .result-total {
-  font-size: 26px;
+  min-width: 42px;
+
+  font-size: 28px;
   font-weight: 900;
+
+  text-align: right;
+}
+
+.success-status {
+  color: #86efac;
+
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ============================================================
    HISTÓRICO
    ============================================================ */
 
-.history-header {
+.history-entry {
+  margin: 8px 0;
+  padding: 11px;
+
+  border: 1px solid #303642;
+  border-radius: 11px;
+
+  background: #191c23;
+}
+
+.history-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   gap: 8px;
 }
 
-#clear-history {
+.history-player {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  min-width: 0;
+}
+
+.history-dice {
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 8px;
+
+  background: #252a34;
+}
+
+.history-player > div {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+}
+
+.history-player strong {
+  overflow: hidden;
+
+  font-size: 12px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history-player span {
+  margin-top: 2px;
+
+  color: #9ca3af;
+
+  font-size: 10px;
+}
+
+.history-result {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.history-entry small {
+  display: block;
+
+  margin-top: 7px;
+
+  color: #7c8492;
+
+  font-size: 9px;
+}
+
+.secondary-button {
   padding: 7px 10px;
 
-  border: 1px solid #4b5563;
-  border-radius: 7px;
+  border: 1px solid #46505e;
+  border-radius: 8px;
 
-  background: #111827;
-  color: #f9fafb;
+  background: #15181e;
+  color: #e5e7eb;
 
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 900;
 
   cursor: pointer;
 }
 
-#clear-history:hover {
-  background: #1f2937;
+.secondary-button:hover {
+  background: #222731;
 }
 
-.history-entry {
+/* ============================================================
+   AJUDA
+   ============================================================ */
+
+.help-card {
+  padding: 20px;
+
+  border: 1px solid #303642;
+  border-radius: 14px;
+
+  background: #191c23;
+
+  text-align: center;
+}
+
+.help-icon {
+  margin-bottom: 8px;
+
+  font-size: 30px;
+}
+
+.help-card h2 {
+  margin: 0 0 10px;
+
+  font-size: 18px;
+}
+
+.help-card p {
+  color: #a3a9b5;
+
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   EMPTY
+   ============================================================ */
+
+.empty-state {
   display: flex;
   flex-direction: column;
+  align-items: center;
 
-  margin: 8px 0;
-  padding: 10px;
+  padding: 28px 16px;
 
-  border-left: 3px solid #ec4899;
-  border-radius: 6px;
+  border: 1px dashed #3b4351;
+  border-radius: 14px;
 
-  background: #1f2937;
+  color: #8c94a2;
+
+  text-align: center;
 }
 
-.history-entry strong {
-  font-size: 14px;
+.empty-icon {
+  margin-bottom: 8px;
+
+  font-size: 30px;
 }
 
-.history-entry span {
-  margin-top: 3px;
+.empty-state strong {
+  color: #dce0e7;
+
+  font-size: 13px;
 }
 
-.history-entry small {
-  margin-top: 4px;
-  color: #9ca3af;
+.empty-state span {
+  max-width: 280px;
+
+  margin-top: 5px;
+
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 /* ============================================================
@@ -330,28 +821,33 @@ hr {
    ============================================================ */
 
 #status {
-  min-height: 20px;
-  margin-top: 12px;
-  color: #d1d5db;
-  font-size: 13px;
+  min-height: 18px;
+
+  margin: 8px 0 0;
+
+  color: #a3aab7;
+
+  font-size: 11px;
 }
 
 /* ============================================================
-   PUXADOR DE REDIMENSIONAMENTO
+   REDIMENSIONAMENTO
    ============================================================ */
 
 #resize-handle {
   position: fixed;
+
   right: 2px;
   bottom: 2px;
+
+  z-index: 9999;
 
   width: 18px;
   height: 18px;
 
   cursor: nwse-resize;
-  z-index: 9999;
 
-  opacity: 0.55;
+  opacity: 0.45;
 
   background:
     linear-gradient(
@@ -382,17 +878,17 @@ hr {
    MOBILE
    ============================================================ */
 
-@media (max-width: 380px) {
+@media (max-width: 420px) {
   .app {
-    padding: 12px 12px 28px;
+    padding: 14px 12px 30px;
   }
 
   .gm-skill-row {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .gm-skill-row > div {
+  .skill-actions {
     width: 100%;
   }
 
@@ -400,5 +896,37 @@ hr {
   .gm-roll-button,
   .cancel-request-button {
     flex: 1;
+  }
+
+  .player-header {
+    min-height: 56px;
+  }
+}
+
+/* ============================================================
+   ANIMAÇÕES
+   ============================================================ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes result-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
