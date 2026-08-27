@@ -15,10 +15,23 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
   background: #111827;
   color: #f3f4f6;
+}
+
+body {
+  position: relative;
+}
+
+body.resizing {
+  cursor: nwse-resize;
+  user-select: none;
 }
 
 button {
@@ -27,14 +40,15 @@ button {
 
 .app {
   width: 100%;
-  max-width: 460px;
+  max-width: 650px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 32px;
 }
 
 h1 {
   margin: 0 0 16px;
   font-size: 24px;
+  font-weight: 800;
 }
 
 h2 {
@@ -77,13 +91,16 @@ hr {
   color: #f9fafb;
 
   cursor: pointer;
+
   transition:
     transform 0.08s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .skill-button:hover {
   background: #273449;
+  border-color: #6b7280;
 }
 
 .skill-button:active {
@@ -260,6 +277,7 @@ hr {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 #clear-history {
@@ -277,6 +295,10 @@ hr {
   cursor: pointer;
 }
 
+#clear-history:hover {
+  background: #1f2937;
+}
+
 .history-entry {
   display: flex;
   flex-direction: column;
@@ -288,6 +310,10 @@ hr {
   border-radius: 6px;
 
   background: #1f2937;
+}
+
+.history-entry strong {
+  font-size: 14px;
 }
 
 .history-entry span {
@@ -311,12 +337,54 @@ hr {
 }
 
 /* ============================================================
-   CELULAR
+   PUXADOR DE REDIMENSIONAMENTO
+   ============================================================ */
+
+#resize-handle {
+  position: fixed;
+  right: 2px;
+  bottom: 2px;
+
+  width: 18px;
+  height: 18px;
+
+  cursor: nwse-resize;
+  z-index: 9999;
+
+  opacity: 0.55;
+
+  background:
+    linear-gradient(
+      135deg,
+      transparent 0 45%,
+      #9ca3af 45% 52%,
+      transparent 52%
+    ),
+    linear-gradient(
+      135deg,
+      transparent 0 62%,
+      #9ca3af 62% 69%,
+      transparent 69%
+    ),
+    linear-gradient(
+      135deg,
+      transparent 0 79%,
+      #9ca3af 79% 86%,
+      transparent 86%
+    );
+}
+
+#resize-handle:hover {
+  opacity: 1;
+}
+
+/* ============================================================
+   MOBILE
    ============================================================ */
 
 @media (max-width: 380px) {
   .app {
-    padding: 12px;
+    padding: 12px 12px 28px;
   }
 
   .gm-skill-row {
