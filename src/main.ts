@@ -80,6 +80,58 @@ const processedRolls =
 
 let currentPlayers: any[] = [];
 
+// ============================================================
+// CONVERTE O NOME PARA A FORMA SEGURA DA NOTAÇÃO DO DICE+
+// ============================================================
+
+function getDiceSkillName(
+  skillName: string
+) {
+  return skillName
+    .replaceAll("-", " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ============================================================
+// TENTA RECUPERAR O NOME ORIGINAL DO ATRIBUTO
+// ============================================================
+
+function getOriginalSkillName(
+  diceSkillName: string
+) {
+  const normalized =
+    diceSkillName
+      .replaceAll("-", " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const matchingSkill =
+    skills.find((skill) => {
+      const normalizedSkill =
+        skill.name
+          .replaceAll("-", " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+
+      return (
+        normalizedSkill ===
+        normalized
+      );
+    });
+
+  return (
+    matchingSkill?.name ??
+    diceSkillName
+  );
+}
+
+// ============================================================
+// LIMPA O BADGE
+// ============================================================
+
 async function clearBadge() {
   try {
     await OBR.action.setBadgeText(
@@ -92,6 +144,10 @@ async function clearBadge() {
     );
   }
 }
+
+// ============================================================
+// HISTÓRICO DO MESTRE
+// ============================================================
 
 function getGmHistory(): HistoryEntry[] {
   try {
@@ -146,7 +202,6 @@ function addGmHistory(
 
   history.unshift(entry);
 
-  // Mantém somente os últimos 100 testes.
   const limited =
     history.slice(0, 100);
 
@@ -155,48 +210,12 @@ function addGmHistory(
   return limited;
 }
 
-function extractSkillName(
-  result: RollResult,
-  fallback?: string
-) {
-  const groups =
-    result.result?.groups ?? [];
+function clearGmHistory() {
+  localStorage.removeItem(
+    HISTORY_STORAGE_KEY
+  );
 
-  const skillFromDescription =
-    groups
-      .map(
-        (group) =>
-          group.description
-      )
-      .find(
-        (description) =>
-          typeof description ===
-            "string" &&
-          description.trim().length >
-            0
-      );
-
-  if (skillFromDescription) {
-    return skillFromDescription;
-  }
-
-  const notation =
-    result.result?.diceNotation ??
-    "";
-
-  if (notation.includes("#")) {
-    return notation
-      .split("#")
-      .slice(1)
-      .join("#")
-      .trim();
-  }
-
-  if (fallback) {
-    return fallback;
-  }
-
-  return "Teste";
+  renderGmHistory();
 }
 
 function renderGmHistory() {
@@ -240,11 +259,15 @@ function renderGmHistory() {
         return `
           <div class="history-entry">
             <strong>
-              ${escapeHtml(entry.playerName)}
+              ${escapeHtml(
+                entry.playerName
+              )}
             </strong>
 
             <span>
-              ${escapeHtml(entry.skillName)}
+              ${escapeHtml(
+                entry.skillName
+              )}
               — ${entry.total}
             </span>
 
@@ -262,13 +285,64 @@ function renderGmHistory() {
       .join("");
 }
 
-function clearGmHistory() {
-  localStorage.removeItem(
-    HISTORY_STORAGE_KEY
-  );
+// ============================================================
+// DESCOBRE O NOME DO TESTE NO RESULTADO DO DICE+
+// ============================================================
 
-  renderGmHistory();
+function extractSkillName(
+  result: RollResult,
+  fallback?: string
+) {
+  const groups =
+    result.result?.groups ?? [];
+
+  const skillFromDescription =
+    groups
+      .map(
+        (group) =>
+          group.description
+      )
+      .find(
+        (description) =>
+          typeof description ===
+            "string" &&
+          description.trim().length >
+            0
+      );
+
+  if (skillFromDescription) {
+    return getOriginalSkillName(
+      skillFromDescription
+    );
+  }
+
+  const notation =
+    result.result?.diceNotation ??
+    "";
+
+  if (notation.includes("#")) {
+    const description =
+      notation
+        .split("#")
+        .slice(1)
+        .join("#")
+        .trim();
+
+    return getOriginalSkillName(
+      description
+    );
+  }
+
+  if (fallback) {
+    return fallback;
+  }
+
+  return "Teste";
 }
+
+// ============================================================
+// START
+// ============================================================
 
 async function start() {
   const playerName =
@@ -299,9 +373,9 @@ async function start() {
     playerId
   );
 
-  // ============================================================
-  // RESULTADOS DO DICE+
-  // ============================================================
+  // ==========================================================
+  // RESULTADO DO DICE+
+  // ==========================================================
 
   OBR.broadcast.onMessage(
     `${EXTENSION_ID}/roll-result`,
@@ -319,6 +393,11 @@ async function start() {
           result.rollId
         )
       ) {
+        console.log(
+          "Resultado duplicado ignorado:",
+          result.rollId
+        );
+
         return;
       }
 
@@ -346,15 +425,12 @@ async function start() {
         return;
       }
 
-      const isGm =
-        playerRole === "GM";
-
       // ========================================================
-      // HISTÓRICO DO MESTRE
+      // RESULTADO DO MESTRE
       // ========================================================
 
       if (
-        isGm &&
+        playerRole === "GM" &&
         result.rollTarget ===
           "gm_only"
       ) {
@@ -368,11 +444,16 @@ async function start() {
         addGmHistory({
           playerId:
             result.playerId,
+
           playerName:
             result.playerName,
+
           skillName,
+
           total,
+
           source,
+
           timestamp:
             Date.now(),
         });
@@ -391,10 +472,12 @@ async function start() {
       }
 
       // ========================================================
-      // RESULTADO PARA UM JOGADOR
+      // RESULTADO PARA O JOGADOR
       // ========================================================
 
-      if (!isGm) {
+      if (
+        playerRole !== "GM"
+      ) {
         const status =
           document.querySelector<HTMLParagraphElement>(
             "#status"
@@ -415,7 +498,8 @@ async function start() {
       );
 
       if (
-        processedRolls.size > 100
+        processedRolls.size >
+        100
       ) {
         const oldest =
           processedRolls
@@ -432,9 +516,9 @@ async function start() {
     }
   );
 
-  // ============================================================
-  // PEDIDO RECEBIDO PELO PLAYER
-  // ============================================================
+  // ==========================================================
+  // PEDIDO DE TESTE RECEBIDO
+  // ==========================================================
 
   OBR.broadcast.onMessage(
     LOCAL_REQUEST_CHANNEL,
@@ -457,24 +541,30 @@ async function start() {
     }
   );
 
-  // ============================================================
+  // ==========================================================
   // MODO MESTRE
-  // ============================================================
+  // ==========================================================
 
-  if (playerRole === "GM") {
+  if (
+    playerRole === "GM"
+  ) {
     currentPlayers =
       await OBR.party.getPlayers();
+
+    console.log(
+      "Jogadores:",
+      currentPlayers
+    );
 
     renderGmInterface(
       playerName,
       currentPlayers
     );
 
-    // Atualiza automaticamente quando jogadores entram,
-    // saem ou mudam.
     OBR.party.onChange(
       (players) => {
-        currentPlayers = players;
+        currentPlayers =
+          players;
 
         renderGmInterface(
           playerName,
@@ -486,9 +576,9 @@ async function start() {
     return;
   }
 
-  // ============================================================
+  // ==========================================================
   // MODO JOGADOR
-  // ============================================================
+  // ==========================================================
 
   const metadata =
     await OBR.player.getMetadata();
@@ -544,8 +634,14 @@ function renderGmInterface(
         const skillRows =
           skills
             .map((skill) => {
+              const diceSkillName =
+                getDiceSkillName(
+                  skill.name
+                );
+
               return `
                 <div class="gm-skill-row">
+
                   <span>
                     ${escapeHtml(
                       skill.name
@@ -554,6 +650,7 @@ function renderGmInterface(
                   </span>
 
                   <div>
+
                     <button
                       class="request-button"
                       data-player-id="${player.id}"
@@ -569,11 +666,14 @@ function renderGmInterface(
                       data-player-id="${player.id}"
                       data-player-name="${escapeHtml(player.name)}"
                       data-skill="${skill.name}"
+                      data-dice-skill="${diceSkillName}"
                       data-bonus="${skill.bonus}"
                     >
                       ROLAR
                     </button>
+
                   </div>
+
                 </div>
               `;
             })
@@ -581,6 +681,7 @@ function renderGmInterface(
 
         return `
           <div class="player-card">
+
             <h3>
               ${escapeHtml(
                 player.name
@@ -588,6 +689,7 @@ function renderGmInterface(
             </h3>
 
             ${skillRows}
+
           </div>
         `;
       })
@@ -597,6 +699,7 @@ function renderGmInterface(
     "#app"
   )!.innerHTML = `
     <div class="app">
+
       <h1>RPG Calúnia</h1>
 
       <p>
@@ -638,22 +741,27 @@ function renderGmInterface(
       <hr />
 
       <div class="history-header">
-        <h2>Histórico secreto</h2>
+
+        <h2>
+          Histórico secreto
+        </h2>
 
         <button id="clear-history">
           LIMPAR
         </button>
+
       </div>
 
       <div id="history"></div>
+
     </div>
   `;
 
   renderGmHistory();
 
-  // ============================================================
-  // BOTÃO PEDIR
-  // ============================================================
+  // ==========================================================
+  // PEDIR
+  // ==========================================================
 
   document
     .querySelectorAll<HTMLButtonElement>(
@@ -680,11 +788,16 @@ function renderGmInterface(
           const request:
             TestRequest = {
             targetPlayerId,
+
             targetPlayerName,
+
             skillName,
+
             bonus,
+
             requesterName:
               playerName,
+
             timestamp:
               Date.now(),
           };
@@ -708,6 +821,7 @@ function renderGmInterface(
 
           } catch (error) {
             console.error(
+              "Erro ao enviar pedido:",
               error
             );
 
@@ -718,9 +832,9 @@ function renderGmInterface(
       );
     });
 
-  // ============================================================
-  // BOTÃO ROLAR PELO JOGADOR
-  // ============================================================
+  // ==========================================================
+  // ROLAR PELO MESTRE
+  // ==========================================================
 
   document
     .querySelectorAll<HTMLButtonElement>(
@@ -738,6 +852,9 @@ function renderGmInterface(
 
           const skillName =
             button.dataset.skill!;
+
+          const diceSkillName =
+            button.dataset.diceSkill!;
 
           const bonus =
             Number(
@@ -757,9 +874,6 @@ function renderGmInterface(
             skillName
           );
 
-          // Esse ID é importante:
-          // ele diz que foi o Mestre que originou
-          // a rolagem em nome desse jogador.
           pendingRollPlayers.set(
             rollId,
             targetPlayerId
@@ -773,18 +887,25 @@ function renderGmInterface(
               "dice-plus/roll-request",
               {
                 rollId,
+
                 playerId:
                   targetPlayerId,
+
                 playerName:
                   targetPlayerName,
+
                 rollTarget:
                   "gm_only",
+
                 diceNotation:
-                  `1d20+${bonus} # ${skillName}`,
+                  `1d20+${bonus} # ${diceSkillName}`,
+
                 showResults:
                   false,
+
                 timestamp:
                   Date.now(),
+
                 source:
                   EXTENSION_ID,
               },
@@ -815,9 +936,9 @@ function renderGmInterface(
       );
     });
 
-  // ============================================================
+  // ==========================================================
   // LIMPAR HISTÓRICO
-  // ============================================================
+  // ==========================================================
 
   document
     .querySelector<HTMLButtonElement>(
@@ -870,6 +991,7 @@ function renderPlayerInterface(
     "#app"
   )!.innerHTML = `
     <div class="app">
+
       <h1>RPG Calúnia</h1>
 
       <p>
@@ -890,6 +1012,7 @@ function renderPlayerInterface(
         pendingRequest
           ? `
             <div class="pending-test">
+
               <hr />
 
               <h2>
@@ -911,9 +1034,12 @@ function renderPlayerInterface(
                 +${pendingRequest.bonus}
               </p>
 
-              <button id="requested-roll">
+              <button
+                id="requested-roll"
+              >
                 ROLAR
               </button>
+
             </div>
           `
           : ""
@@ -921,29 +1047,33 @@ function renderPlayerInterface(
 
       <hr />
 
-      <h2>Meus testes</h2>
+      <h2>
+        Meus testes
+      </h2>
 
       ${skillButtons}
 
       <p id="status"></p>
+
     </div>
   `;
 
-  // ============================================================
-  // TESTE SOLICITADO
-  // ============================================================
+  // ==========================================================
+  // ROLAR TESTE SOLICITADO
+  // ==========================================================
 
-  document
-    .querySelector<HTMLButtonElement>(
+  const requestedRoll =
+    document.querySelector<HTMLButtonElement>(
       "#requested-roll"
-    )
-    ?.addEventListener(
+    );
+
+  if (
+    requestedRoll &&
+    pendingRequest
+  ) {
+    requestedRoll.addEventListener(
       "click",
       async () => {
-        if (!pendingRequest) {
-          return;
-        }
-
         const status =
           document.querySelector<HTMLParagraphElement>(
             "#status"
@@ -957,6 +1087,11 @@ function renderPlayerInterface(
           pendingRequest.skillName
         );
 
+        const diceSkillName =
+          getDiceSkillName(
+            pendingRequest.skillName
+          );
+
         status.textContent =
           `Rolando ${pendingRequest.skillName}...`;
 
@@ -965,16 +1100,23 @@ function renderPlayerInterface(
             "dice-plus/roll-request",
             {
               rollId,
+
               playerId,
+
               playerName,
+
               rollTarget:
                 "gm_only",
+
               diceNotation:
-                `1d20+${pendingRequest.bonus} # ${pendingRequest.skillName}`,
+                `1d20+${pendingRequest.bonus} # ${diceSkillName}`,
+
               showResults:
                 false,
+
               timestamp:
                 Date.now(),
+
               source:
                 EXTENSION_ID,
             },
@@ -999,6 +1141,7 @@ function renderPlayerInterface(
 
         } catch (error) {
           console.error(
+            "Erro ao realizar teste solicitado:",
             error
           );
 
@@ -1011,10 +1154,11 @@ function renderPlayerInterface(
         }
       }
     );
+  }
 
-  // ============================================================
+  // ==========================================================
   // TESTES ESPONTÂNEOS
-  // ============================================================
+  // ==========================================================
 
   document
     .querySelectorAll<HTMLButtonElement>(
@@ -1045,6 +1189,11 @@ function renderPlayerInterface(
             skillName
           );
 
+          const diceSkillName =
+            getDiceSkillName(
+              skillName
+            );
+
           status.textContent =
             `Rolando ${skillName}...`;
 
@@ -1053,16 +1202,23 @@ function renderPlayerInterface(
               "dice-plus/roll-request",
               {
                 rollId,
+
                 playerId,
+
                 playerName,
+
                 rollTarget:
                   "gm_only",
+
                 diceNotation:
-                  `1d20+${bonus} # ${skillName}`,
+                  `1d20+${bonus} # ${diceSkillName}`,
+
                 showResults:
                   false,
+
                 timestamp:
                   Date.now(),
+
                 source:
                   EXTENSION_ID,
               },
@@ -1074,6 +1230,7 @@ function renderPlayerInterface(
 
           } catch (error) {
             console.error(
+              "Erro ao enviar rolagem:",
               error
             );
 
